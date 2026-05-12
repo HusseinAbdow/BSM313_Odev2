@@ -1,6 +1,18 @@
-BSM313_Odev3.ioc
+## Build outputs (Makefile)
+build/
+*.o
+*.a
+*.d
+*.lst
+*.map
+*.elf
+*.hex
+*.bin
+
+## Editor/OS
+.DS_Store
+
+## Local notes / chat logs
 pastchat.txt
-startup_stm32f103xb.s
-STM32F103XX_FLASH.ld
 
 
