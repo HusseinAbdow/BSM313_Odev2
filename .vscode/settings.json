@@ -1,0 +1,5 @@
+{
+  // Helps VS Code C/C++ IntelliSense match the Makefile build.
+  "C_Cpp.default.configurationProvider": null,
+  "C_Cpp.default.compileCommands": null
+}

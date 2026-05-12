@@ -1,0 +1,103 @@
+Doküman NoFRM-0746Yayın Tarihi01.11.2021Revizyon Tarihi23.06.2023Revizyon No1Doküman NoFRM-0746Yayın Tarihi01.11.2021Revizyon Tarihi23.06.2023Revizyon No1SINAV SORU-CEVAP FORMU
+Doküman No
+FRM-0746
+Yayın Tarihi
+01.11.2021
+Revizyon Tarihi
+23.06.2023
+Revizyon No
+1
+
+Doküman No
+FRM-0746
+Yayın Tarihi
+01.11.2021
+Revizyon Tarihi
+23.06.2023
+Revizyon No
+1
+
+
+FAKÜLTE
+Mühendislik Mimarlık ve Tasarım Fakültesi
+PROGRAM
+Bilgisayar Mühendisliği
+DERSİN KODU-ADI
+BSM316 Gömülü Sistemler
+ÖĞRETİM TÜRÜ
+☒
+Normal Öğr.
+☐
+İkinci Öğr.
+SINAV TARİH
+
+SINAV SAATİ
+
+SINAV SÜRESİ
+
+AKADEMİK YIL
+2025 / 2026
+YARIYIL
+☐
+Güz
+☒
+Bahar
+ÖĞRETİM ELEMANI
+Dr. Öğr. Üyesi Murat Uysal
+SINAV TÜRÜ
+Ara Sınav ☐
+Final ☐
+Bütünleme ☐
+Kısa Sınav ☐
+Diğer ☒
+SINAV PUANI 1
+
+
+ÖĞRENCİ NUMARASI
+
+SINIFI
+
+ADI SOYADI
+
+İMZA
+
+
+ÖDEV 3
+Soru 1.
+ÖÇ: 1, 2, 3, 4, 5, 6, 7
+Şekildeki devreyi kurun * (Kurulum için Kurulum Notları’na bakın).
+TIM2 adlı zamanlayıcıyı saniyede 1 kere interrupt oluşturması için konfigüre edin. (10 Puan)
+PC13’e bağlı LED’i saniyede 1 kere yakıp söndürmek için gerekli kodu TIM2’nin interrupt handler fonksiyonunda yazın. (HAL_Delay vb. bekletme yapan fonksiyon kullanmayın.) (10 Puan)
+LED, blink_count değişkeninin değeri kadar 1‘er saniye yanıp söndükten sonra yanıp sönmeyi durdursun. 5sn. sönük dursun. Bu çalışma düzeni sürekli tekrarlansın. (10 Puan)
+blink_count değişkeni 4 ila 7 değerleri arasında olacaktır. Bunun için blink_count değeri 7’den küçükse butona her basıldığında blink_count değeri 1 artsın. blink_count değişkeninin değeri 7 iken butona basılırsa blink_count değeri 4 olsun. (10 Puan)
+Yazılım çalışmaya başladığında blink_count değeri MCU flash’ından yüklensin. blink_count değeri her değiştiğinde değer MCU flash’ında blink_count değişkeni için ayıracağınız yere yazılsın. (25 Puan)
+Dahili flash memory içinde blink_count için kullanacağınız alan daha önce yazılmamışsa bu bölgedeki tüm byte’lar 0xFFFF’tir. Kısaca, flash memory’den elde ettiğiniz değer 7’den büyükse blink_count değerini ve blink_count değişkenine karşılık gelen flash memory alanındaki değeri 4 yapın. (10 Puan)
+Yazılımın çalışmaya başlamasından itibaren en az 3 saniye boyunca buton basılı tutulursa sistem fabrika ayarlarına dönsün. (blink_count değeri 4 olsun.) (20 Puan)
+PA1 pini GPIO output olarak yapılandırılsın ve çıkışı lojik 0 olarak kalsın. Programın çalışması boyunca çıkış değeri değişmesin. (5 Puan)
+
+Uygulama kodlarını github profilinize yükleyin. (.zip, .rar, .tar vb. arşiv dosyası halinde yüklemeyin!) Proje adresini buraya yazın:
+
+Kartın çalışmasını youtube.com sitesine yükleyeceğiniz videoya çekin. Video adresini buraya yazın:
+Çektiğiniz videoda;
+Kartınıza güç verildiğinde LED’in 4 kere yanıp söndüğünü 5sn bekledikten sonra yine 4 kere yanıp söndüğünü gösterin. (İşlem adımları: a, b, c)
+Butona 1 kere basın. Aynı davranışı LED’in 5 kere yanıp sönerek tekrarladığını gösterin. (İşlem adımları: d)
+Kartın gücünü kesip tekrar verin. LED’in 5 kere yanıp söndüğünü gösterin. (İşlem adımları: e, f)
+Butonu en az 3sn. basılı tutun. Blink sayısının sadece 1 arttığını, 6 olduğunu, gösterin. (İşlem adımları: d, g)
+Kartın gücünü kesin. Butona basılı tutarak gücü verin. Butonu en az 3sn. basılı tutun. Blink sayısının 4 olduğunu gösterin. (İşlem adımları: g)
+KURULUM NOTLARI
+Bluepill kartında PC13’e bağlı LED yerleşik olarak bulunduğundan PC13 pinine ayrıca LED (ve direnç) bağlamayın. Devreyi kurmak için breadboard, buton ve kablonuz varsa şekildeki gibi kurabilirsiniz.
+İMKANINIZ YOKSA: (h adımında istenenleri yaptığınız varsayılarak) Herhangi bir metal parçasını (tornavida, cımbız vs) kart üzerindeki A0 ve A1 pinlerine ait pad’lere birlikte dokundurmanız butona basma etkisi yapacaktır.
+
+ÖDEV KURALLARI:
+Ödev teslim tarihi 14/05/2026 saat 17:00’dir. Aynı ödevler “Kopyaya Teşebbüs” olarak değerlendirilir.
+
+Adres:Bartın Üniversitesi Rektörlüğü
+74100 Merkez / BARTIN
+
+(Form No: FRM-0001, Revizyon Tarihi: -, Revizyon No: 0)
+Telefon:
+İnternet Adresi:
+E-Posta:
+0378 223 55 00
+www.bartin.edu.tr info@bartin.edu.tr
+Sayfa 1 / 1
