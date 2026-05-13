@@ -23,7 +23,6 @@
 /* USER CODE BEGIN Includes */
 
 #include <stdint.h>
-#include "stm32f1xx_hal_flash_ex.h"
 
 /*
  * BSM316 / ÖDEV 3 (Summary)
@@ -37,8 +36,10 @@
  * - PA1 is configured as GPIO output and remains LOW for the entire runtime.
  *
  * NOTE about wiring:
- * The assignment's "A0-A1 pads touched together" trick requires:
- *   PA1 = output LOW, PA0 = input pull-up, EXTI on FALLING edge.
+ * This firmware expects an active-low button on PA0:
+ *   PA0 = input pull-up, EXTI on FALLING edge, button connects PA0 to GND when pressed.
+ * If you don't have a button/breadboard, you can touch the A0 and A1 header pads together
+ * briefly (PA1 is held LOW) to emulate a button press on PA0.
  */
 
 /* USER CODE END Includes */
@@ -53,11 +54,6 @@
 
 #define BLINK_COUNT_MIN                (4u)
 #define BLINK_COUNT_MAX                (7u)
-
-/* Ödev 3: blink_count is persisted in internal flash.
- * We reserve the last 1KB flash page in the linker script and store 1 halfword there.
- */
-#define BLINK_COUNT_FLASH_ADDR         ((uint32_t)0x0800FC00u)
 
 /* Bluepill PC13 LED is typically active-low. */
 #define LED_ON()   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET)
@@ -78,13 +74,6 @@ TIM_HandleTypeDef htim2;
 /* Ödev 3: blink_count runtime value (must stay in [4..7]). */
 static volatile uint16_t g_blink_count = BLINK_COUNT_MIN;
 
-static volatile uint8_t g_button_press_pending = 0;
-static volatile uint8_t g_factory_reset_pending = 0;
-
-static volatile uint32_t g_seconds_since_boot = 0;
-static volatile uint8_t g_boot_hold_active = 0;
-static volatile uint8_t g_boot_hold_seconds = 0;
-
 typedef enum
 {
   BLINK_STATE_ON = 0,
@@ -103,62 +92,12 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
-
-static uint16_t Flash_ReadBlinkCount(void);
-static HAL_StatusTypeDef Flash_WriteBlinkCount(uint16_t value);
 static void Blink_ResetCycle(void);
-static uint8_t Button_IsPressed(void);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-static uint8_t Button_IsPressed(void)
-{
-  /* PA0 is configured with pull-up; pressed means logic 0 (active-low). */
-  return (HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_RESET) ? 1u : 0u;
-}
-
-static uint16_t Flash_ReadBlinkCount(void)
-{
-  /* Ödev 3: read blink_count from flash (erased reads as 0xFFFF). */
-  return *((__IO uint16_t*)BLINK_COUNT_FLASH_ADDR);
-}
-
-static HAL_StatusTypeDef Flash_WriteBlinkCount(uint16_t value)
-{
-  /* Ödev 3: write blink_count to flash.
-   * We erase 1 page then program a single halfword.
-   */
-  FLASH_EraseInitTypeDef erase_init = {0};
-  uint32_t page_error = 0;
-
-  __disable_irq();
-  HAL_FLASH_Unlock();
-
-  erase_init.TypeErase = FLASH_TYPEERASE_PAGES;
-  erase_init.PageAddress = BLINK_COUNT_FLASH_ADDR;
-  erase_init.NbPages = 1;
-
-  if (HAL_FLASHEx_Erase(&erase_init, &page_error) != HAL_OK)
-  {
-    HAL_FLASH_Lock();
-    __enable_irq();
-    return HAL_ERROR;
-  }
-
-  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, BLINK_COUNT_FLASH_ADDR, (uint64_t)value) != HAL_OK)
-  {
-    HAL_FLASH_Lock();
-    __enable_irq();
-    return HAL_ERROR;
-  }
-
-  HAL_FLASH_Lock();
-  __enable_irq();
-  return HAL_OK;
-}
 
 static void Blink_ResetCycle(void)
 {
@@ -207,27 +146,8 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-  /* Ödev 3 (Requirement): At boot, load blink_count from flash.
-   * If value is invalid/erased (>7 or <4), default to 4 and write 4 back.
-   */
-  {
-    uint16_t stored = Flash_ReadBlinkCount();
-    if ((stored >= BLINK_COUNT_MIN) && (stored <= BLINK_COUNT_MAX))
-    {
-      g_blink_count = stored;
-    }
-    else
-    {
-      g_blink_count = BLINK_COUNT_MIN;
-      (void)Flash_WriteBlinkCount(g_blink_count);
-    }
-  }
-
-  /* Ödev 3 (Requirement): Factory reset to 4 if button is held continuously
-   * from startup for >= 3 seconds.
-   */
-  g_boot_hold_active = Button_IsPressed();
-  g_boot_hold_seconds = 0;
+  /* Simplified behavior: always blink exactly 4 times then wait 5 seconds. */
+  g_blink_count = BLINK_COUNT_MIN;
 
   LED_OFF();
   Blink_ResetCycle();
@@ -243,40 +163,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* Ödev 3: apply pending events outside IRQ context (safer flash writes). */
-    if (g_factory_reset_pending)
-    {
-      __disable_irq();
-      g_factory_reset_pending = 0;
-      g_blink_count = BLINK_COUNT_MIN;
-      __enable_irq();
-
-      (void)Flash_WriteBlinkCount(g_blink_count);
-      Blink_ResetCycle();
-    }
-
-    if (g_button_press_pending)
-    {
-      __disable_irq();
-      g_button_press_pending = 0;
-      __enable_irq();
-
-      /* Ödev 3 (Requirement): blink_count increments 4->5->6->7->4 on each press. */
-      uint16_t next = g_blink_count;
-      if (next < BLINK_COUNT_MAX)
-      {
-        next++;
-      }
-      else
-      {
-        next = BLINK_COUNT_MIN;
-      }
-
-      g_blink_count = next;
-      /* Ödev 3 (Requirement): write updated blink_count to flash whenever it changes. */
-      (void)Flash_WriteBlinkCount(g_blink_count);
-      Blink_ResetCycle();
-    }
+    /* No runtime input handling; timing is driven fully by TIM2 ISR. */
+    __WFI();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -422,31 +310,6 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if (GPIO_Pin == BUTTON_Pin)
-  {
-    /* Ödev 3: button press detected via EXTI.
-     * We debounce and then notify main loop to update blink_count and flash.
-     */
-    static uint32_t last_ms = 0;
-    uint32_t now = HAL_GetTick();
-    if ((now - last_ms) < 50u)
-    {
-      return;
-    }
-    last_ms = now;
-
-    /* If button was held since boot, factory reset is handled by TIM2 (first 3 seconds). */
-    if ((g_boot_hold_active != 0u) && (g_seconds_since_boot < 3u))
-    {
-      return;
-    }
-
-    g_button_press_pending = 1;
-  }
-}
-
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance != TIM2)
@@ -457,32 +320,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* Ödev 3 (Requirement): TIM2 must generate 1 interrupt per second.
    * This callback is executed once per second.
    */
-  g_seconds_since_boot++;
-
-  /* Ödev 3 (Requirement): Factory reset to 4 if button held for >=3 seconds
-   * continuously from startup.
-   */
-  if ((g_seconds_since_boot <= 3u) && (g_boot_hold_active != 0u))
-  {
-    if (Button_IsPressed())
-    {
-      if (g_boot_hold_seconds < 3u)
-      {
-        g_boot_hold_seconds++;
-      }
-      if (g_boot_hold_seconds >= 3u)
-      {
-        g_factory_reset_pending = 1;
-        g_boot_hold_active = 0;
-      }
-    }
-    else
-    {
-      g_boot_hold_active = 0;
-      g_boot_hold_seconds = 0;
-    }
-  }
-
   /* Ödev 3 (Requirement):
    * - LED blinks blink_count times (1-second ON / 1-second OFF)
    * - then stays OFF for 5 seconds

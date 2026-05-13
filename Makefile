@@ -152,6 +152,30 @@ all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET
 
 
 #######################################
+# flash / run helpers (stlink-tools)
+#######################################
+FLASH_ADDR = 0x08000000
+STFLASH ?= st-flash
+
+.PHONY: flash erase reset flash_erase
+
+# Build + program + reset the MCU (this is the closest thing to "run")
+flash: all
+	$(STFLASH) --reset write $(BUILD_DIR)/$(TARGET).bin $(FLASH_ADDR)
+
+# Mass erase flash (also clears persisted blink_count)
+erase:
+	$(STFLASH) erase
+
+# Reset the MCU (requires NRST connected; otherwise press the on-board reset)
+reset:
+	$(STFLASH) reset
+
+# Erase then flash
+flash_erase: erase flash
+
+
+#######################################
 # build the application
 #######################################
 # list of objects
