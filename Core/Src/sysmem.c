@@ -80,8 +80,6 @@ void *_sbrk(ptrdiff_t incr)
 }
 
 #if defined(__PICOLIBC__)
-  // Picolibc expects syscalls without the leading underscore.
-  // This creates a strong alias so that
-  // calls to `sbrk()` are resolved to our `_sbrk()` implementation.
+  /* Picolibc: sbrk() -> _sbrk() yönlendirmesi */
   __strong_reference(_sbrk, sbrk);
 #endif

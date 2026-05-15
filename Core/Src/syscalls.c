@@ -175,15 +175,14 @@ int _execve(char *name, char **argv, char **env)
   return -1;
 }
 
-// --- Picolibc Specific Section ---
+/* --- Picolibc bölümü --- */
 #if defined(__PICOLIBC__)
 
 /**
- * @brief Picolibc helper function to output a character to a FILE stream.
- *        This redirects the output to the low-level __io_putchar function.
- * @param c Character to write.
- * @param file FILE stream pointer (ignored).
- * @retval int The character written.
+ * @brief Picolibc: FILE üzerinden tek karakter yazdırma
+ * @param c Yazdırılacak karakter
+ * @param file FILE işaretçisi (kullanılmıyor)
+ * @retval int Yazdırılan karakter
  */
 static int starm_putc(char c, FILE *file)
 {
@@ -193,10 +192,9 @@ static int starm_putc(char c, FILE *file)
 }
 
 /**
- * @brief Picolibc helper function to input a character from a FILE stream.
- *        This redirects the input from the low-level __io_getchar function.
- * @param file FILE stream pointer (ignored).
- * @retval int The character read, cast to an unsigned char then int.
+ * @brief Picolibc: FILE üzerinden tek karakter okuma
+ * @param file FILE işaretçisi (kullanılmıyor)
+ * @retval int Okunan karakter
  */
 static int starm_getc(FILE *file)
 {
@@ -206,23 +204,18 @@ static int starm_getc(FILE *file)
 	return c;
 }
 
-// Define and initialize the standard I/O streams for Picolibc.
-// FDEV_SETUP_STREAM connects the starm_putc and starm_getc helper functions to a FILE structure.
-// _FDEV_SETUP_RW indicates the stream is for reading and writing.
+/* Picolibc: standart I/O için tek bir stream tanımı */
 static FILE __stdio = FDEV_SETUP_STREAM(starm_putc,
 					starm_getc,
 					NULL,
 					_FDEV_SETUP_RW);
 
-// Assign the standard stream pointers (stdin, stdout, stderr) to the initialized stream.
-// Picolibc uses these pointers for standard I/O operations (printf, scanf, etc.).
+/* Picolibc: stdin/stdout/stderr aynı stream'i kullansın */
 FILE *const stdin = &__stdio;
 __strong_reference(stdin, stdout);
 __strong_reference(stdin, stderr);
 
-// Create strong aliases mapping standard C library function names (without underscore)
-// to the implemented system call stubs (with underscore). Picolibc uses these
-// standard names internally, so this linking is required.
+/* Picolibc: alt çizgisiz syscall isimleri -> _xxx stub'ları */
 __strong_reference(_read, read);
 __strong_reference(_write, write);
 __strong_reference(_times, times);
