@@ -24,6 +24,8 @@
 
 #include <stdint.h>
 
+#include "stm32f1xx_hal_flash_ex.h"
+
 /*
  * BSM316 / ÖDEV 3 (Summary)
  * - TIM2 @ 1 Hz interrupt drives the whole timing (no HAL_Delay).
@@ -59,6 +61,9 @@
 #define LED_ON()   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET)
 #define LED_OFF()  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET)
 
+/* Reserve last flash page for persistent user data (see STM32F103XX_FLASH.ld). */
+#define FLASH_BLINK_COUNT_ADDR        (0x0800FC00u)
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -85,6 +90,18 @@ static volatile BlinkState g_blink_state = BLINK_STATE_ON;
 static volatile uint8_t g_blinks_done = 0;
 static volatile uint8_t g_pause_remaining = 0;
 
+/* Flash persistence (write from main loop, not from ISR). */
+static volatile uint8_t g_flash_write_pending = 0;
+static volatile uint16_t g_flash_value_pending = BLINK_COUNT_MIN;
+
+/* Factory reset detection during startup window.
+ * We detect a continuous >=3s press within the first few seconds after boot.
+ */
+static volatile uint8_t g_startup_check_active = 1;
+static uint32_t g_startup_window_start_tick = 0u;
+static uint32_t g_startup_press_start_tick = 0u;
+static uint8_t g_startup_press_tracking = 0u;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -93,6 +110,9 @@ static void MX_GPIO_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 static void Blink_ResetCycle(void);
+
+static uint16_t Flash_ReadBlinkCount(void);
+static HAL_StatusTypeDef Flash_WriteBlinkCount(uint16_t value);
 
 /* USER CODE END PFP */
 
@@ -110,6 +130,38 @@ static void Blink_ResetCycle(void)
   LED_ON();
   g_blink_state = BLINK_STATE_OFF;
   __enable_irq();
+}
+
+static uint16_t Flash_ReadBlinkCount(void)
+{
+  return *((volatile const uint16_t *)FLASH_BLINK_COUNT_ADDR);
+}
+
+static HAL_StatusTypeDef Flash_WriteBlinkCount(uint16_t value)
+{
+  HAL_StatusTypeDef status = HAL_OK;
+  FLASH_EraseInitTypeDef eraseInit = {0};
+  uint32_t pageError = 0;
+
+  __disable_irq();
+  if (HAL_FLASH_Unlock() != HAL_OK)
+  {
+    __enable_irq();
+    return HAL_ERROR;
+  }
+
+  eraseInit.TypeErase = FLASH_TYPEERASE_PAGES;
+  eraseInit.PageAddress = FLASH_BLINK_COUNT_ADDR;
+  eraseInit.NbPages = 1;
+  status = HAL_FLASHEx_Erase(&eraseInit, &pageError);
+  if (status == HAL_OK)
+  {
+    status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, FLASH_BLINK_COUNT_ADDR, (uint64_t)value);
+  }
+
+  (void)HAL_FLASH_Lock();
+  __enable_irq();
+  return status;
 }
 
 /* USER CODE END 0 */
@@ -146,8 +198,30 @@ int main(void)
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
-  /* Simplified behavior: always blink exactly 4 times then wait 5 seconds. */
-  g_blink_count = BLINK_COUNT_MIN;
+  /* Load blink_count from internal flash (persistent). If erased/invalid (>7), default to 4
+   * and update flash to 4.
+   */
+  {
+    uint16_t stored = Flash_ReadBlinkCount();
+    if ((stored < BLINK_COUNT_MIN) || (stored > BLINK_COUNT_MAX))
+    {
+      g_blink_count = BLINK_COUNT_MIN;
+      g_flash_value_pending = BLINK_COUNT_MIN;
+      g_flash_write_pending = 1u;
+    }
+    else
+    {
+      g_blink_count = stored;
+    }
+  }
+
+  /* Factory reset condition at boot: if the button is held continuously for the
+    * startup window, blink_count is reset to 4.
+   */
+  g_startup_check_active = 1u;
+    g_startup_window_start_tick = HAL_GetTick();
+    g_startup_press_start_tick = 0u;
+    g_startup_press_tracking = 0u;
 
   LED_OFF();
   Blink_ResetCycle();
@@ -163,8 +237,54 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* No runtime input handling; timing is driven fully by TIM2 ISR. */
     __WFI();
+
+    /* Factory reset: if button is held >=3s within the startup window.
+     * This runs in the main loop using SysTick time base for robustness.
+     */
+    if (g_startup_check_active != 0u)
+    {
+      uint32_t now = HAL_GetTick();
+      if ((now - g_startup_window_start_tick) > 5000u)
+      {
+        g_startup_check_active = 0u;
+        g_startup_press_tracking = 0u;
+      }
+      else
+      {
+        uint8_t pressed = (HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_RESET) ? 1u : 0u;
+        if (pressed != 0u)
+        {
+          if (g_startup_press_tracking == 0u)
+          {
+            g_startup_press_tracking = 1u;
+            g_startup_press_start_tick = now;
+          }
+          else if ((now - g_startup_press_start_tick) >= 3000u)
+          {
+            g_blink_count = BLINK_COUNT_MIN;
+            g_flash_value_pending = BLINK_COUNT_MIN;
+            g_flash_write_pending = 1u;
+            Blink_ResetCycle();
+            g_startup_check_active = 0u;
+          }
+        }
+        else
+        {
+          g_startup_press_tracking = 0u;
+        }
+      }
+    }
+
+    /* Handle pending flash write outside interrupt context. */
+    if (g_flash_write_pending != 0u)
+    {
+      uint16_t value = g_flash_value_pending;
+      if (Flash_WriteBlinkCount(value) == HAL_OK)
+      {
+        g_flash_write_pending = 0u;
+      }
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -363,6 +483,37 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
       }
       break;
   }
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin != BUTTON_Pin)
+  {
+    return;
+  }
+
+  /* Simple debounce using system tick. */
+  static uint32_t lastPressTick = 0u;
+  uint32_t now = HAL_GetTick();
+  if ((now - lastPressTick) < 200u)
+  {
+    return;
+  }
+  lastPressTick = now;
+
+  if (g_blink_count < BLINK_COUNT_MAX)
+  {
+    g_blink_count++;
+  }
+  else
+  {
+    g_blink_count = BLINK_COUNT_MIN;
+  }
+
+  /* Persist and restart blink cycle with the new count. */
+  g_flash_value_pending = (uint16_t)g_blink_count;
+  g_flash_write_pending = 1u;
+  Blink_ResetCycle();
 }
 
 /* USER CODE END 4 */
